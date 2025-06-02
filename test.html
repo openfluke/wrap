@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Paragon WASM Activation Test</title>
+    <script src="wasm_exec.js"></script>
+    <style>
+      body {
+        font-family: monospace;
+        background: #111;
+        color: #eee;
+        padding: 1em;
+      }
+      pre {
+        background: #222;
+        padding: 1em;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Paragon Activation Function Benchmark</h1>
+    <button onclick="runBenchmark()">Run Benchmark</button>
+    <pre id="output">Waiting...</pre>
+
+    <script>
+      const go = new Go();
+      let wasmLoaded = false;
+
+      WebAssembly.instantiateStreaming(fetch("paragon.wasm"), go.importObject)
+        .then((result) => {
+          go.run(result.instance);
+          wasmLoaded = true;
+          document.getElementById("output").textContent =
+            "WASM Loaded. Ready to benchmark.";
+        })
+        .catch((err) => {
+          document.getElementById("output").textContent =
+            "WASM load error: " + err;
+        });
+
+      async function runBenchmark() {
+        if (!wasmLoaded) return;
+
+        const types = [
+          { label: "float32", factory: "NewNetworkFloat32" },
+          { label: "int32", factory: "NewNetworkInt32" },
+          { label: "uint32", factory: "NewNetworkUint32" },
+        ];
+
+        const activations = [
+          "linear",
+          "relu",
+          "leaky_relu",
+          "elu",
+          "swish",
+          "gelu",
+          "tanh",
+          "softmax",
+        ];
+
+        const layerSizes = JSON.stringify([
+          { Width: 28, Height: 28 },
+          { Width: 32, Height: 32 },
+          { Width: 32, Height: 32 },
+          { Width: 10, Height: 1 },
+        ]);
+        const fc = JSON.stringify([true, true, true, true]);
+
+        const testInput = JSON.stringify([
+          Array.from({ length: 28 * 28 }, () => Math.random()),
+        ]);
+
+        const iterations = 1000;
+        const tolerance = 1e-5;
+
+        let out = "==== Activation Function Performance ====";
+        out += `\nType       | Activation   | CPU (ms)   | GPU (ms)   | Speedup | Match`;
+        out += `\n--------------------------------------------------------------`;
+
+        for (const { label, factory } of types) {
+          for (const act of activations) {
+            try {
+              const acts = JSON.stringify(["linear", act, act, "softmax"]);
+              const net = window[factory](layerSizes, acts, fc);
+
+              // CPU Benchmark
+              const t0 = performance.now();
+              for (let i = 0; i < iterations; i++) net.Forward(testInput);
+              const t1 = performance.now();
+              net.ApplySoftmax("[]");
+              const cpuOut = JSON.parse(net.GetOutput("[]"));
+              const cpuTime = t1 - t0;
+
+              // GPU Benchmark
+              const initArg = JSON.stringify([label]);
+              const err = net.InitializeOptimizedGPU(initArg);
+              let gpuOut = [],
+                gpuTime = 0;
+
+              if (err && typeof err === "string" && err.startsWith("Failed")) {
+                out += `\n${label.padEnd(10)}| ${act.padEnd(12)}| ${cpuTime
+                  .toFixed(2)
+                  .padEnd(10)}| N/A        | N/A     | ❌`;
+                continue;
+              }
+
+              net.Forward(testInput); // warm-up
+              const t2 = performance.now();
+              for (let i = 0; i < iterations; i++) net.Forward(testInput);
+              const t3 = performance.now();
+              net.ApplySoftmax("[]");
+              gpuOut = JSON.parse(net.GetOutput("[]"));
+              gpuTime = t3 - t2;
+
+              // Compare outputs
+              let match = true;
+              for (let i = 0; i < cpuOut.length; i++) {
+                if (Math.abs(cpuOut[i] - gpuOut[i]) > tolerance) {
+                  match = false;
+                  break;
+                }
+              }
+
+              const speedup = (cpuTime / gpuTime).toFixed(2);
+              out += `\n${label.padEnd(10)}| ${act.padEnd(12)}| ${cpuTime
+                .toFixed(2)
+                .padEnd(10)}| ${gpuTime
+                .toFixed(2)
+                .padEnd(10)}| ${speedup.padEnd(7)}| ${match ? "✅" : "❌"}`;
+            } catch (e) {
+              out += `\n${label.padEnd(10)}| ${act.padEnd(
+                12
+              )}| ERROR      | ERROR      | N/A     | ❌`;
+              console.error(`${label}/${act} failed:`, e);
+            }
+          }
+        }
+
+        document.getElementById("output").textContent = out;
+      }
+    </script>
+  </body>
+</html>
