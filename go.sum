@@ -1,12 +1,6 @@
-github.com/openfluke/paragon v1.0.1-0.20250602001852-6fb611b73394 h1:ZkXTuf0rwit77wKqsSy1sRW1hOlo8wSLxolslQQ1ew0=
-github.com/openfluke/paragon v1.0.1-0.20250602001852-6fb611b73394/go.mod h1:uaiIpZuoWuR4IowXkct5bmvayueA6HYpuLKGWOOEv58=
+github.com/openfluke/paragon/v3 v3.0.0 h1:MRzAwC8xE5Wq7BkHg7jw8NGTTX0IS24Lf/qi+6dBb74=
+github.com/openfluke/paragon/v3 v3.0.0/go.mod h1:rENPkft4pPEo75qILGFlZ35r2kSPvTnQFM4CX+V9qf4=
 github.com/openfluke/webgpu v0.0.0-20250602002809-2a3d4670a0d4 h1:ERg69QxWU6JYHBAlQ25m6PMPbcFtLQibMAz5lVvOCbg=
 github.com/openfluke/webgpu v0.0.0-20250602002809-2a3d4670a0d4/go.mod h1:072J6eEkBj9KgFzMY1RMgscUnu3EfTZsQABObSMZy1c=
-github.com/openfluke/webgpu v0.0.0-20250602003950-f83ba15ddfca h1:LrI2FRoHJ7hEk1/K+j/Vxx2Kg9mIoAKtoOBIuF/FK2I=
-github.com/openfluke/webgpu v0.0.0-20250602003950-f83ba15ddfca/go.mod h1:072J6eEkBj9KgFzMY1RMgscUnu3EfTZsQABObSMZy1c=
-github.com/openfluke/webgpu v0.0.0-20250602004331-0b1d9efae109 h1:rCv0fMgC3g66dUa/wtFAj7H5JWGu2MLBTqHvt7UT1hk=
-github.com/openfluke/webgpu v0.0.0-20250602004331-0b1d9efae109/go.mod h1:072J6eEkBj9KgFzMY1RMgscUnu3EfTZsQABObSMZy1c=
-github.com/openfluke/webgpu v0.0.0-20250602005547-91a3206aa7a9 h1:9riKRyvNiKaLp9nPOxjtffdLqUgRw73QLpneMB6cCk8=
-github.com/openfluke/webgpu v0.0.0-20250602005547-91a3206aa7a9/go.mod h1:072J6eEkBj9KgFzMY1RMgscUnu3EfTZsQABObSMZy1c=
 github.com/openfluke/webgpu v0.0.0-20250602005907-ad2e76f7888f h1:ZVeq99Nq5aLOB3KVogbE89lwevtxw2T/g2UcdqoAyhE=
 github.com/openfluke/webgpu v0.0.0-20250602005907-ad2e76f7888f/go.mod h1:072J6eEkBj9KgFzMY1RMgscUnu3EfTZsQABObSMZy1c=

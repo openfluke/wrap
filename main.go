@@ -8,7 +8,7 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/openfluke/paragon"
+	"github.com/openfluke/paragon/v3"
 )
 
 // methodWrapper dynamically wraps each method to expose it to JavaScript
