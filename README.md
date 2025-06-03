@@ -4,6 +4,16 @@
 
 This project provides a WebAssembly (WASM) wrapper for the Paragon AI framework, written in Go. It enables the use of Paragon's neural network capabilities in JavaScript environments, such as web browsers, by compiling Go code to WASM. The wrapper exposes Paragon's network creation and methods to JavaScript, supporting multiple numeric types for flexibility.
 
+## Git clone from
+
+```
+go get github.com/openfluke/paragon/v3@v3.0.0
+```
+
+```
+go get github.com/openfluke/webgpu@ad2e76f
+```
+
 ## Purpose
 
 The main goal is to bridge the Paragon AI framework with JavaScript applications, allowing developers to leverage Paragon's neural network functionality in web-based projects. This is achieved by:
