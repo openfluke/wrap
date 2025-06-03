@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Paragon Network Growth Demo</title>
+    <script src="wasm_exec.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: #eee;
+        padding: 2em;
+        margin: 0;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 15px;
+        padding: 2em;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 2em;
+        font-size: 2.5em;
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5em;
+        margin-bottom: 2em;
+      }
+
+      .control-group {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1.5em;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .control-group h3 {
+        margin-top: 0;
+        color: #4ecdc4;
+        border-bottom: 2px solid #4ecdc4;
+        padding-bottom: 0.5em;
+      }
+
+      label {
+        display: block;
+        margin: 1em 0 0.5em 0;
+        font-weight: 500;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 0.8em;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 5px;
+        background: rgba(0, 0, 0, 0.3);
+        color: #eee;
+        font-size: 1em;
+        box-sizing: border-box;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #4ecdc4;
+        box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+      }
+
+      button {
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        color: white;
+        border: none;
+        padding: 1em 2em;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 1.1em;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        margin: 0.5em;
+        min-width: 150px;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      }
+
+      button:disabled {
+        background: #666;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .button-row {
+        text-align: center;
+        margin: 2em 0;
+      }
+
+      .output {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        padding: 1.5em;
+        margin-top: 2em;
+        min-height: 200px;
+        font-family: "Courier New", monospace;
+        white-space: pre-wrap;
+        overflow-y: auto;
+        max-height: 500px;
+      }
+
+      .status {
+        padding: 1em;
+        border-radius: 5px;
+        margin: 1em 0;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .status.loading {
+        background: rgba(255, 193, 7, 0.2);
+        border: 1px solid #ffc107;
+        color: #ffc107;
+      }
+
+      .status.success {
+        background: rgba(40, 167, 69, 0.2);
+        border: 1px solid #28a745;
+        color: #28a745;
+      }
+
+      .status.error {
+        background: rgba(220, 53, 69, 0.2);
+        border: 1px solid #dc3545;
+        color: #dc3545;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 20px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 1em 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+
+      .network-viz {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        padding: 1em;
+        margin: 1em 0;
+        text-align: center;
+        font-family: monospace;
+      }
+
+      .layer-box {
+        display: inline-block;
+        background: rgba(78, 205, 196, 0.2);
+        border: 2px solid #4ecdc4;
+        border-radius: 8px;
+        padding: 0.5em 1em;
+        margin: 0.2em;
+        vertical-align: middle;
+      }
+
+      .layer-arrow {
+        display: inline-block;
+        margin: 0 0.5em;
+        font-size: 1.2em;
+        color: #ff6b6b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🧠 Paragon Network Growth Demo</h1>
+
+      <div id="wasmStatus" class="status loading">Loading WASM module...</div>
+
+      <div class="controls">
+        <div class="control-group">
+          <h3>🏗️ Network Architecture</h3>
+          <label>Initial Layer Sizes (JSON):</label>
+          <textarea id="layerSizes" rows="4">
+[
+  {"Width": 4, "Height": 1},
+  {"Width": 6, "Height": 1},
+  {"Width": 4, "Height": 1}
+]</textarea
+          >
+
+          <label>Activations:</label>
+          <input
+            type="text"
+            id="activations"
+            value="linear,relu,softmax"
+            placeholder="linear,relu,softmax"
+          />
+
+          <label>Fully Connected:</label>
+          <input
+            type="text"
+            id="connected"
+            value="false,true,true"
+            placeholder="false,true,true"
+          />
+        </div>
+
+        <div class="control-group">
+          <h3>📊 Training Data</h3>
+          <label>Sample Inputs (JSON):</label>
+          <textarea id="inputs" rows="4">
+[
+  [[1.0, 0.0, 0.0, 0.0]],
+  [[0.0, 1.0, 0.0, 0.0]],
+  [[0.0, 0.0, 1.0, 0.0]],
+  [[0.0, 0.0, 0.0, 1.0]]
+]</textarea
+          >
+
+          <label>Expected Labels:</label>
+          <input
+            type="text"
+            id="labels"
+            value="0,1,2,3"
+            placeholder="0,1,2,3"
+          />
+        </div>
+
+        <div class="control-group">
+          <h3>🚀 Growth Parameters</h3>
+          <label>Checkpoint Layer:</label>
+          <input type="number" id="checkpointLayer" value="1" min="1" />
+
+          <label>Candidates:</label>
+          <input
+            type="number"
+            id="numCandidates"
+            value="50"
+            min="1"
+            max="200"
+          />
+
+          <label>Epochs:</label>
+          <input type="number" id="epochs" value="5" min="1" max="50" />
+
+          <label>Learning Rate:</label>
+          <input
+            type="number"
+            id="learningRate"
+            value="0.05"
+            step="0.01"
+            min="0.001"
+            max="1"
+          />
+
+          <label>Tolerance:</label>
+          <input
+            type="number"
+            id="tolerance"
+            value="0.000001"
+            step="0.000001"
+          />
+        </div>
+
+        <div class="control-group">
+          <h3>📏 Size Constraints</h3>
+          <label>Width Range:</label>
+          <input
+            type="text"
+            id="widthRange"
+            value="2,8"
+            placeholder="min,max"
+          />
+
+          <label>Height Range:</label>
+          <input
+            type="text"
+            id="heightRange"
+            value="1,4"
+            placeholder="min,max"
+          />
+
+          <label>Clip Range:</label>
+          <input
+            type="text"
+            id="clipRange"
+            value="-1.0,1.0"
+            placeholder="lower,upper"
+          />
+
+          <label>Available Activations:</label>
+          <input
+            type="text"
+            id="activationPool"
+            value="relu,sigmoid,tanh"
+            placeholder="relu,sigmoid,tanh"
+          />
+
+          <label>Max Threads:</label>
+          <input type="number" id="maxThreads" value="4" min="1" max="16" />
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button id="createBtn" onclick="createNetwork()">
+          🏗️ Create Network
+        </button>
+        <button id="growBtn" onclick="runGrowth()" disabled>
+          🌱 Run Growth
+        </button>
+        <button id="clearBtn" onclick="clearOutput()">🧹 Clear Output</button>
+      </div>
+
+      <div class="progress-bar" id="progressContainer" style="display: none">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+
+      <div id="networkViz" class="network-viz" style="display: none">
+        <h4>Current Network Structure:</h4>
+        <div id="networkDisplay"></div>
+      </div>
+
+      <div class="output" id="output">Waiting for WASM to load...</div>
+    </div>
+
+    <script>
+      const go = new Go();
+      let wasmLoaded = false;
+      let currentNetwork = null;
+
+      // Load WASM with better error handling
+      console.log("Starting WASM load...");
+
+      // Check if files exist first
+      fetch("wasm_exec.js")
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`wasm_exec.js not found (${response.status})`);
+          }
+          console.log("✅ wasm_exec.js found");
+          return fetch("paragon.wasm");
+        })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`paragon.wasm not found (${response.status})`);
+          }
+          console.log("✅ paragon.wasm found");
+          console.log("🔄 Instantiating WASM...");
+          return WebAssembly.instantiateStreaming(
+            fetch("paragon.wasm"),
+            go.importObject
+          );
+        })
+        .then((result) => {
+          console.log("✅ WASM instantiated, running...");
+          go.run(result.instance);
+          wasmLoaded = true;
+          updateStatus(
+            "WASM module loaded successfully! Ready to create networks.",
+            "success"
+          );
+          document.getElementById("createBtn").disabled = false;
+          console.log("🎉 WASM fully loaded and ready!");
+        })
+        .catch((err) => {
+          console.error("WASM load error:", err);
+          updateStatus("WASM load error: " + err.message, "error");
+
+          // Additional debugging info
+          const debugInfo = `
+Debug Info:
+- Make sure paragon.wasm is in the same directory as this HTML file
+- Make sure wasm_exec.js is in the same directory as this HTML file
+- Check browser console for more details
+- Try serving from a local HTTP server (not file://)
+
+Error: ${err.message}`;
+
+          document.getElementById("output").textContent = debugInfo;
+        });
+
+      function updateStatus(message, type) {
+        const status = document.getElementById("wasmStatus");
+        status.textContent = message;
+        status.className = `status ${type}`;
+      }
+
+      function log(message) {
+        const output = document.getElementById("output");
+        output.textContent += message + "\n";
+        output.scrollTop = output.scrollHeight;
+      }
+
+      function clearOutput() {
+        document.getElementById("output").textContent = "";
+      }
+
+      function updateProgress(percent) {
+        const progressContainer = document.getElementById("progressContainer");
+        const progressFill = document.getElementById("progressFill");
+
+        if (percent > 0) {
+          progressContainer.style.display = "block";
+          progressFill.style.width = percent + "%";
+        } else {
+          progressContainer.style.display = "none";
+        }
+      }
+
+      function visualizeNetwork(network) {
+        const viz = document.getElementById("networkViz");
+        const display = document.getElementById("networkDisplay");
+
+        if (!network || !network.Layers) {
+          viz.style.display = "none";
+          return;
+        }
+
+        let html = "";
+        for (let i = 0; i < network.Layers.length; i++) {
+          const layer = network.Layers[i];
+          const activation =
+            layer.Neurons && layer.Neurons[0] && layer.Neurons[0][0]
+              ? layer.Neurons[0][0].Activation
+              : "linear";
+
+          html += `<div class="layer-box">
+            Layer ${i}<br>
+            ${layer.Width}×${layer.Height}<br>
+            ${activation}
+          </div>`;
+
+          if (i < network.Layers.length - 1) {
+            html += '<span class="layer-arrow">→</span>';
+          }
+        }
+
+        display.innerHTML = html;
+        viz.style.display = "block";
+      }
+
+      function parseArray(str) {
+        try {
+          return JSON.parse(str);
+        } catch (e) {
+          // Try comma-separated format
+          return str.split(",").map((s) => {
+            const trimmed = s.trim();
+            return trimmed === "true"
+              ? true
+              : trimmed === "false"
+              ? false
+              : isNaN(trimmed)
+              ? trimmed
+              : Number(trimmed);
+          });
+        }
+      }
+
+      function createNetwork() {
+        if (!wasmLoaded) {
+          updateStatus("WASM not loaded yet!", "error");
+          return;
+        }
+
+        try {
+          log("🏗️  Creating new network...");
+
+          // Parse inputs
+          const layerSizes = JSON.parse(
+            document.getElementById("layerSizes").value
+          );
+          const activations = parseArray(
+            document.getElementById("activations").value
+          );
+          const connected = parseArray(
+            document.getElementById("connected").value
+          );
+
+          log(`Layer sizes: ${JSON.stringify(layerSizes)}`);
+          log(`Activations: ${JSON.stringify(activations)}`);
+          log(`Connected: ${JSON.stringify(connected)}`);
+
+          // Create network using your WASM factory function
+          currentNetwork = window.NewNetworkFloat32(
+            JSON.stringify(layerSizes),
+            JSON.stringify(activations),
+            JSON.stringify(connected)
+          );
+
+          if (currentNetwork) {
+            log("✅ Network created successfully!");
+
+            // Try to get network info through available methods
+            let totalLayers = "unknown";
+            try {
+              // Try different ways to get layer count
+              if (currentNetwork.GetLayerCount) {
+                totalLayers = currentNetwork.GetLayerCount();
+              } else if (currentNetwork.Layers) {
+                totalLayers = currentNetwork.Layers.length;
+              } else {
+                // Estimate from layer sizes input
+                totalLayers = layerSizes.length;
+              }
+            } catch (e) {
+              log(`Debug: Could not get layer count - ${e.message}`);
+            }
+
+            log(`Total layers: ${totalLayers}`);
+
+            // Try to get network structure for visualization
+            try {
+              let networkStructure = null;
+              if (currentNetwork.GetStructure) {
+                networkStructure = JSON.parse(currentNetwork.GetStructure());
+              } else if (currentNetwork.Layers) {
+                networkStructure = currentNetwork;
+              } else {
+                // Build structure from inputs
+                networkStructure = {
+                  Layers: layerSizes.map((size, i) => ({
+                    Width: size.Width,
+                    Height: size.Height,
+                    Neurons: [[{ Activation: activations[i] || "linear" }]],
+                  })),
+                };
+              }
+              visualizeNetwork(networkStructure);
+            } catch (e) {
+              log(`Debug: Could not visualize network - ${e.message}`);
+            }
+
+            document.getElementById("growBtn").disabled = false;
+            updateStatus("Network ready for growth experiments!", "success");
+          } else {
+            throw new Error("Network creation returned null");
+          }
+        } catch (e) {
+          log(`❌ Error creating network: ${e.message}`);
+          updateStatus("Network creation failed!", "error");
+          console.error("Network creation error:", e);
+        }
+      }
+
+      async function runGrowth() {
+        if (!currentNetwork) {
+          log("❌ No network created yet!");
+          return;
+        }
+
+        try {
+          log("\n🚀 Starting network growth experiment...");
+          updateProgress(10);
+
+          // Parse parameters
+          const checkpointLayer = parseInt(
+            document.getElementById("checkpointLayer").value
+          );
+          const numCandidates = parseInt(
+            document.getElementById("numCandidates").value
+          );
+          const epochs = parseInt(document.getElementById("epochs").value);
+          const learningRate = parseFloat(
+            document.getElementById("learningRate").value
+          );
+          const tolerance = parseFloat(
+            document.getElementById("tolerance").value
+          );
+
+          const inputs = JSON.parse(document.getElementById("inputs").value);
+          const labels = parseArray(document.getElementById("labels").value);
+
+          const [minWidth, maxWidth] = parseArray(
+            document.getElementById("widthRange").value
+          );
+          const [minHeight, maxHeight] = parseArray(
+            document.getElementById("heightRange").value
+          );
+          const [clipLower, clipUpper] = parseArray(
+            document.getElementById("clipRange").value
+          );
+          const activationPool = parseArray(
+            document.getElementById("activationPool").value
+          );
+          const maxThreads = parseInt(
+            document.getElementById("maxThreads").value
+          );
+
+          log(`📊 Parameters:`);
+          log(`  Checkpoint Layer: ${checkpointLayer}`);
+          log(`  Candidates: ${numCandidates}`);
+          log(`  Epochs: ${epochs}`);
+          log(`  Learning Rate: ${learningRate}`);
+          log(
+            `  Size constraints: ${minWidth}-${maxWidth}w × ${minHeight}-${maxHeight}h`
+          );
+          log(`  Activation pool: ${activationPool.join(", ")}`);
+          log(`  Threads: ${maxThreads}`);
+
+          updateProgress(25);
+
+          // Get initial performance
+          log("\n📈 Evaluating initial performance...");
+          const initialPredictions = [];
+          for (let i = 0; i < inputs.length; i++) {
+            const input = inputs[i];
+            currentNetwork.Forward(JSON.stringify(input));
+            const outputStr = currentNetwork.GetOutput("[]");
+            const output = JSON.parse(outputStr);
+
+            // Debug the raw output
+            log(`Input ${i}: ${JSON.stringify(input[0])}`);
+            log(`Raw output ${i}: ${JSON.stringify(output)}`);
+
+            // More robust prediction calculation
+            let prediction = -1;
+            let processedOutput = output;
+
+            // Handle nested arrays [[0,0,0,0]] -> [0,0,0,0]
+            if (
+              Array.isArray(output) &&
+              output.length === 1 &&
+              Array.isArray(output[0])
+            ) {
+              processedOutput = output[0];
+              log(
+                `Flattened nested output: ${JSON.stringify(processedOutput)}`
+              );
+            }
+
+            if (Array.isArray(processedOutput) && processedOutput.length > 0) {
+              // Check if all values are exactly 0 (uninitialized network)
+              const allZeros = processedOutput.every((x) => x === 0);
+              if (allZeros) {
+                log(
+                  `Warning: All outputs are 0 - network may need initialization`
+                );
+                // For all-zero outputs, just pick a random class
+                prediction = Math.floor(Math.random() * processedOutput.length);
+                log(`Random prediction for all-zero output: ${prediction}`);
+              } else {
+                // Normal case - find max
+                const validOutput = processedOutput.filter(
+                  (x) => typeof x === "number" && !isNaN(x)
+                );
+                if (validOutput.length > 0) {
+                  const maxValue = Math.max(...validOutput);
+                  prediction = processedOutput.indexOf(maxValue);
+                  log(`Max value: ${maxValue}, Prediction: ${prediction}`);
+                } else {
+                  log(`Warning: Output contains no valid numbers`);
+                }
+              }
+            } else {
+              log(
+                `Warning: Output is not a valid array: ${typeof processedOutput}`
+              );
+            }
+
+            initialPredictions.push(prediction);
+          }
+
+          log(`Initial predictions: [${initialPredictions.join(", ")}]`);
+          log(`Expected labels: [${labels.join(", ")}]`);
+
+          // Calculate initial ADHD score
+          let initialScore = 0;
+          try {
+            const evalResult = currentNetwork.EvaluateModel(
+              JSON.stringify(labels),
+              JSON.stringify(initialPredictions)
+            );
+            if (
+              currentNetwork.Performance &&
+              currentNetwork.Performance.Score !== undefined
+            ) {
+              initialScore = currentNetwork.Performance.Score;
+            } else if (typeof evalResult === "number") {
+              initialScore = evalResult;
+            } else {
+              // Calculate accuracy manually as fallback
+              let correct = 0;
+              for (let i = 0; i < labels.length; i++) {
+                if (
+                  initialPredictions[i] === labels[i] &&
+                  initialPredictions[i] !== -1
+                ) {
+                  correct++;
+                }
+              }
+              initialScore = correct / labels.length;
+              log(`Manual accuracy calculation: ${correct}/${labels.length}`);
+            }
+          } catch (e) {
+            log(`Debug: Performance evaluation failed - ${e.message}`);
+            initialScore = 0;
+          }
+
+          log(`📊 Initial ADHD Score: ${initialScore.toFixed(4)}`);
+
+          updateProgress(50);
+
+          // Run the growth algorithm
+          log("\n🌱 Running Grow() algorithm...");
+          log("This may take a moment...");
+
+          const improved = currentNetwork.Grow(
+            checkpointLayer,
+            JSON.stringify(inputs),
+            JSON.stringify(labels),
+            numCandidates,
+            epochs,
+            learningRate,
+            tolerance,
+            clipUpper,
+            clipLower,
+            minWidth,
+            maxWidth,
+            minHeight,
+            maxHeight,
+            JSON.stringify(activationPool),
+            maxThreads
+          );
+
+          updateProgress(90);
+
+          // Get final performance
+          log("\n📈 Evaluating final performance...");
+          const finalPredictions = [];
+          for (let i = 0; i < inputs.length; i++) {
+            const input = inputs[i];
+            currentNetwork.Forward(JSON.stringify(input));
+            const outputStr = currentNetwork.GetOutput("[]");
+            const output = JSON.parse(outputStr);
+
+            // Debug the final output
+            log(`Final output ${i}: ${JSON.stringify(output)}`);
+
+            // More robust prediction calculation for final results
+            let prediction = -1;
+            let processedOutput = output;
+
+            // Handle nested arrays
+            if (
+              Array.isArray(output) &&
+              output.length === 1 &&
+              Array.isArray(output[0])
+            ) {
+              processedOutput = output[0];
+            }
+
+            if (Array.isArray(processedOutput) && processedOutput.length > 0) {
+              const allZeros = processedOutput.every((x) => x === 0);
+              if (allZeros) {
+                prediction = Math.floor(Math.random() * processedOutput.length);
+              } else {
+                const validOutput = processedOutput.filter(
+                  (x) => typeof x === "number" && !isNaN(x)
+                );
+                if (validOutput.length > 0) {
+                  const maxValue = Math.max(...validOutput);
+                  prediction = processedOutput.indexOf(maxValue);
+                }
+              }
+            }
+
+            finalPredictions.push(prediction);
+          }
+
+          log(`Final predictions: [${finalPredictions.join(", ")}]`);
+
+          let finalScore = 0;
+          try {
+            const evalResult = currentNetwork.EvaluateModel(
+              JSON.stringify(labels),
+              JSON.stringify(finalPredictions)
+            );
+            if (
+              currentNetwork.Performance &&
+              currentNetwork.Performance.Score !== undefined
+            ) {
+              finalScore = currentNetwork.Performance.Score;
+            } else if (typeof evalResult === "number") {
+              finalScore = evalResult;
+            } else {
+              // Calculate accuracy manually as fallback
+              let correct = 0;
+              for (let i = 0; i < labels.length; i++) {
+                if (
+                  finalPredictions[i] === labels[i] &&
+                  finalPredictions[i] !== -1
+                ) {
+                  correct++;
+                }
+              }
+              finalScore = correct / labels.length;
+              log(`Manual accuracy calculation: ${correct}/${labels.length}`);
+            }
+          } catch (e) {
+            log(`Debug: Performance evaluation failed - ${e.message}`);
+            finalScore = initialScore; // Use initial score as fallback
+          }
+
+          log(`📊 Final ADHD Score: ${finalScore.toFixed(4)}`);
+
+          const improvement = finalScore - initialScore;
+          log(
+            `📈 Score Change: ${
+              improvement >= 0 ? "+" : ""
+            }${improvement.toFixed(4)}`
+          );
+
+          updateProgress(100);
+
+          // Update visualization with final network structure
+          try {
+            let finalStructure = null;
+            if (currentNetwork.GetStructure) {
+              finalStructure = JSON.parse(currentNetwork.GetStructure());
+            } else if (currentNetwork.Layers) {
+              finalStructure = currentNetwork;
+            }
+            if (finalStructure) {
+              visualizeNetwork(finalStructure);
+              log(`\n🧠 Final network structure updated!`);
+            }
+          } catch (e) {
+            log(`Debug: Could not update network visualization - ${e.message}`);
+          }
+
+          if (improved) {
+            log("\n🎉 SUCCESS: Network was improved by growth!");
+            updateStatus(
+              "Growth experiment completed successfully!",
+              "success"
+            );
+          } else {
+            log("\n⚡ No improvement found during growth experiment.");
+            updateStatus("Growth completed - no improvement found", "loading");
+          }
+
+          setTimeout(() => updateProgress(0), 2000);
+        } catch (e) {
+          log(`❌ Error during growth: ${e.message}`);
+          updateStatus("Growth experiment failed!", "error");
+          updateProgress(0);
+          console.error("Growth error:", e);
+        }
+      }
+    </script>
+  </body>
+</html>
