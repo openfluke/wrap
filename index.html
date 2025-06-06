@@ -16,7 +16,20 @@
       const go = new Go();
       let network = null;
 
+      async function setupWebGPU() {
+        const adapter = await navigator.gpu.requestAdapter();
+        const device = await adapter.requestDevice();
+
+        window.webgpuAdapter = adapter;
+        window.webgpuDevice = device;
+        window.webgpuQueue = device.queue;
+
+        console.log("WebGPU pre-initialized");
+      }
+
       async function loadWasm() {
+        await setupWebGPU(); // Setup WebGPU FIRST
+
         const result = await WebAssembly.instantiateStreaming(
           fetch("paragon.wasm"),
           go.importObject
@@ -68,11 +81,9 @@
         const cpuEnd = performance.now();
 
         // Enable GPU
-        const initResult = network.InitializeOptimizedGPU("[float32]");
-        if (initResult && initResult.startsWith("Failed")) {
-          output.textContent = `WebGPU init failed: ${initResult}`;
-          return;
-        }
+        network.WebGPUNative = true;
+        const initResult = network.InitializeOptimizedGPU();
+        console.log("GPU init returned:", initResult);
 
         // Run on GPU
         const gpuStart = performance.now();

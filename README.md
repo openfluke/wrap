@@ -11,7 +11,7 @@ go get github.com/openfluke/paragon/v3@v3.0.1
 ```
 
 ```
-go get github.com/openfluke/webgpu@ad2e76f
+go get github.com/openfluke/webgpu@ea0f165
 ```
 
 ## Purpose
