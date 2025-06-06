@@ -10,11 +10,11 @@
 
     <button onclick="runComparison()">Run CPU + GPU Comparison</button>
 
-    <pre id="output"></pre>
+    <pre id="output">Loading...</pre>
 
     <script>
       const go = new Go();
-      let network = null;
+      let wasmReady = false;
 
       async function setupWebGPU() {
         const adapter = await navigator.gpu.requestAdapter();
@@ -28,26 +28,43 @@
       }
 
       async function loadWasm() {
-        await setupWebGPU(); // Setup WebGPU FIRST
+        await setupWebGPU();
 
         const result = await WebAssembly.instantiateStreaming(
           fetch("paragon.wasm"),
           go.importObject
         );
         go.run(result.instance);
+
+        // Bind factories to window if not already exposed
+        window.NewNetworkFloat32 = NewNetworkFloat32;
+        window.NewNetworkInt32 = NewNetworkInt32;
+        window.NewNetworkUint32 = NewNetworkUint32;
+
+        wasmReady = true;
+        document.getElementById("output").textContent =
+          "✅ WASM Loaded. Ready to benchmark.";
       }
 
       async function runComparison() {
+        if (!wasmReady) return;
+
         const output = document.getElementById("output");
-        output.textContent = "Running comparison...";
+        output.textContent = "Running comparisons...";
+
+        const types = [
+          { label: "float32", factory: "NewNetworkFloat32" },
+          { label: "int32", factory: "NewNetworkInt32" },
+          { label: "uint32", factory: "NewNetworkUint32" },
+        ];
 
         const layerSizes = JSON.stringify([
-          { Width: 32, Height: 32 }, // 1024
-          { Width: 16, Height: 32 }, // 512
-          { Width: 16, Height: 16 }, // 256
-          { Width: 32, Height: 32 }, // 128
-          { Width: 8, Height: 8 }, // 64
-          { Width: 1, Height: 10 }, // 10
+          { Width: 32, Height: 32 },
+          { Width: 16, Height: 32 },
+          { Width: 16, Height: 16 },
+          { Width: 32, Height: 32 },
+          { Width: 8, Height: 8 },
+          { Width: 1, Height: 10 },
         ]);
 
         const activations = JSON.stringify([
@@ -69,42 +86,58 @@
         ]);
 
         const input = JSON.stringify([
-          [...Array(1024)].map(() => Math.random()),
+          Array.from({ length: 1024 }, () => Math.random()),
         ]);
 
-        network = NewNetworkFloat32(layerSizes, activations, fullConnect);
+        let report = `==== Paragon WASM CPU vs WebGPU ====\n`;
+        report += `Type       | CPU Time (ms) | GPU Time (ms) | Speedup | Match\n`;
+        report += `-------------------------------------------------------------\n`;
 
-        // Run on CPU
-        const cpuStart = performance.now();
-        network.Forward(input);
-        const cpuOutput = network.GetOutput("[]");
-        const cpuEnd = performance.now();
+        const tolerance = 1e-5;
 
-        // Enable GPU
-        network.WebGPUNative = true;
-        const initResult = network.InitializeOptimizedGPU();
-        console.log("GPU init returned:", initResult);
+        for (const { label, factory } of types) {
+          try {
+            const net = window[factory](layerSizes, activations, fullConnect);
 
-        // Run on GPU
-        const gpuStart = performance.now();
-        network.Forward(input);
-        const gpuOutput = network.GetOutput("[]");
-        const gpuEnd = performance.now();
+            // CPU run
+            const cpuStart = performance.now();
+            net.Forward(input);
+            const cpuOut = JSON.parse(net.GetOutput("[]"));
+            const cpuEnd = performance.now();
+            const cpuTime = (cpuEnd - cpuStart).toFixed(2);
 
-        const cpuValues = JSON.parse(cpuOutput)[0]
-          .map((n) => n.toFixed(4))
-          .join(", ");
-        const gpuValues = JSON.parse(gpuOutput)[0]
-          .map((n) => n.toFixed(4))
-          .join(", ");
+            // GPU run
+            net.WebGPUNative = true;
+            const init = net.InitializeOptimizedGPU();
+            const gpuStart = performance.now();
+            net.Forward(input);
+            const gpuOut = JSON.parse(net.GetOutput("[]"));
+            const gpuEnd = performance.now();
+            const gpuTime = (gpuEnd - gpuStart).toFixed(2);
 
-        output.textContent = `
-✅ CPU Time: ${(cpuEnd - cpuStart).toFixed(2)} ms
-🧠 CPU Output: [${cpuValues}]
+            let match = true;
+            for (let i = 0; i < cpuOut[0].length; i++) {
+              if (Math.abs(cpuOut[0][i] - gpuOut[0][i]) > tolerance) {
+                match = false;
+                break;
+              }
+            }
 
-🚀 GPU Time: ${(gpuEnd - gpuStart).toFixed(2)} ms
-⚡ GPU Output: [${gpuValues}]
-        `.trim();
+            const speedup = (cpuTime / gpuTime).toFixed(2);
+            report += `${label.padEnd(10)}| ${cpuTime.padEnd(
+              13
+            )}| ${gpuTime.padEnd(13)}| ${speedup.padEnd(7)}| ${
+              match ? "✅" : "❌"
+            }\n`;
+          } catch (e) {
+            report += `${label.padEnd(
+              10
+            )}| ERROR         | ERROR         | N/A     | ❌\n`;
+            console.error(`${label} benchmark error:`, e);
+          }
+        }
+
+        output.textContent = report;
       }
 
       loadWasm().catch(console.error);

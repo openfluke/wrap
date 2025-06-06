@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Paragon WASM Activation Test</title>
+    <title>Paragon WASM Activation Benchmark</title>
     <script src="wasm_exec.js"></script>
     <style>
       body {
@@ -21,27 +21,55 @@
   <body>
     <h1>Paragon Activation Function Benchmark</h1>
     <button onclick="runBenchmark()">Run Benchmark</button>
-    <pre id="output">Waiting...</pre>
+    <pre id="output">Loading...</pre>
 
     <script>
       const go = new Go();
-      let wasmLoaded = false;
+      let wasmReady = false;
 
-      WebAssembly.instantiateStreaming(fetch("paragon.wasm"), go.importObject)
-        .then((result) => {
+      async function setupWebGPU() {
+        try {
+          const adapter = await navigator.gpu.requestAdapter();
+          const device = await adapter.requestDevice();
+
+          window.webgpuAdapter = adapter;
+          window.webgpuDevice = device;
+          window.webgpuQueue = device.queue;
+
+          console.log("✅ WebGPU initialized");
+        } catch (err) {
+          console.warn("⚠️ WebGPU setup failed:", err);
+        }
+      }
+
+      async function loadWasm() {
+        await setupWebGPU();
+
+        try {
+          const result = await WebAssembly.instantiateStreaming(
+            fetch("paragon.wasm"),
+            go.importObject
+          );
           go.run(result.instance);
-          wasmLoaded = true;
+
+          // Ensure functions are bound
+          window.NewNetworkFloat32 = NewNetworkFloat32;
+          window.NewNetworkInt32 = NewNetworkInt32;
+          window.NewNetworkUint32 = NewNetworkUint32;
+
+          wasmReady = true;
           document.getElementById("output").textContent =
-            "WASM Loaded. Ready to benchmark.";
-        })
-        .catch((err) => {
+            "✅ WASM loaded. Ready to benchmark.";
+        } catch (err) {
           document.getElementById("output").textContent =
-            "WASM load error: " + err;
-        });
+            "❌ WASM load error: " + err;
+        }
+      }
 
       async function runBenchmark() {
-        if (!wasmLoaded) return;
+        if (!wasmReady) return;
 
+        const output = document.getElementById("output");
         const types = [
           { label: "float32", factory: "NewNetworkFloat32" },
           { label: "int32", factory: "NewNetworkInt32" },
@@ -67,9 +95,11 @@
         ]);
         const fc = JSON.stringify([true, true, true, true]);
 
-        const testInput = JSON.stringify([
-          Array.from({ length: 28 * 28 }, () => Math.random()),
-        ]);
+        const testInput = JSON.stringify(
+          Array.from({ length: 32 }, () =>
+            Array.from({ length: 28 * 28 }, () => Math.random())
+          )
+        );
 
         const iterations = 1000;
         const tolerance = 1e-5;
@@ -93,8 +123,8 @@
               const cpuTime = t1 - t0;
 
               // GPU Benchmark
-              const initArg = JSON.stringify([label]);
-              const err = net.InitializeOptimizedGPU(initArg);
+              net.WebGPUNative = true;
+              const err = net.InitializeOptimizedGPU();
               let gpuOut = [],
                 gpuTime = 0;
 
@@ -115,8 +145,8 @@
 
               // Compare outputs
               let match = true;
-              for (let i = 0; i < cpuOut.length; i++) {
-                if (Math.abs(cpuOut[i] - gpuOut[i]) > tolerance) {
+              for (let i = 0; i < cpuOut[0].length; i++) {
+                if (Math.abs(cpuOut[0][i] - gpuOut[0][i]) > tolerance) {
                   match = false;
                   break;
                 }
@@ -137,8 +167,10 @@
           }
         }
 
-        document.getElementById("output").textContent = out;
+        output.textContent = out;
       }
+
+      loadWasm().catch(console.error);
     </script>
   </body>
 </html>
