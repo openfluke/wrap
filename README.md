@@ -7,7 +7,7 @@ This project provides a WebAssembly (WASM) wrapper for the Paragon AI framework,
 ## Git clone from
 
 ```
-go get github.com/openfluke/paragon/v3@v3.0.1
+go get github.com/openfluke/paragon/v3@v3.1.0
 ```
 
 ```
@@ -35,30 +35,27 @@ The following table summarizes the performance of various activation functions t
 
 | Type    | Activation | CPU (ms) | GPU (ms) | Speedup | Match |
 | ------- | ---------- | -------- | -------- | ------- | ----- |
-| float32 | linear     | 1102.90  | 1090.70  | 1.01    | ✅    |
-| float32 | relu       | 1137.50  | 1095.00  | 1.04    | ✅    |
-| float32 | leaky_relu | 1139.70  | 1091.60  | 1.04    | ✅    |
-| float32 | elu        | 1105.60  | 1082.90  | 1.02    | ✅    |
-| float32 | swish      | 1106.30  | 1097.40  | 1.01    | ✅    |
-| float32 | gelu       | 1050.80  | 1116.30  | 0.94    | ✅    |
-| float32 | tanh       | 1033.90  | 1102.60  | 0.94    | ✅    |
-| float32 | softmax    | 1045.70  | 1158.30  | 0.90    | ✅    |
-| int32   | linear     | 1043.10  | 1101.20  | 0.95    | ✅    |
-| int32   | relu       | 1036.40  | 1034.30  | 1.00    | ✅    |
-| int32   | leaky_relu | 1147.60  | 1148.70  | 1.00    | ✅    |
-| int32   | elu        | 1061.10  | 1077.10  | 0.99    | ✅    |
-| int32   | swish      | 1163.70  | 1065.00  | 1.09    | ✅    |
-| int32   | gelu       | 1083.10  | 1167.90  | 0.93    | ✅    |
-| int32   | tanh       | 1162.00  | 1065.40  | 1.09    | ✅    |
-| int32   | softmax    | 1068.10  | 1098.20  | 0.97    | ✅    |
-| uint32  | linear     | 1228.90  | 1048.00  | 1.17    | ✅    |
-| uint32  | relu       | 1054.20  | 1060.80  | 0.99    | ✅    |
-| uint32  | leaky_relu | 1092.80  | 1141.30  | 0.96    | ✅    |
-| uint32  | elu        | 1052.50  | 1039.70  | 1.01    | ✅    |
-| uint32  | swish      | 1050.40  | 1030.90  | 1.02    | ✅    |
-| uint32  | gelu       | 1115.60  | 1171.50  | 0.95    | ✅    |
-| uint32  | tanh       | 1180.60  | 1068.40  | 1.11    | ✅    |
-| uint32  | softmax    | 1088.00  | 1055.20  | 1.03    | ✅    |
+| float32 | linear     | 6.80     | 1.50     | 4.53    | ✅    |
+| float32 | relu       | 4.40     | 1.40     | 3.14    | ✅    |
+| float32 | leaky_relu | 3.00     | 1.50     | 2.00    | ✅    |
+| float32 | elu        | 1.60     | 1.50     | 1.07    | ✅    |
+| float32 | sigmoid    | 1.60     | 1.60     | 1.00    | ✅    |
+| float32 | tanh       | 1.60     | 1.50     | 1.07    | ✅    |
+| float32 | softmax    | 1.90     | 1.50     | 1.27    | ✅    |
+| int32   | linear     | 1.80     | 1.60     | 1.13    | ✅    |
+| int32   | relu       | 1.60     | 1.60     | 1.00    | ✅    |
+| int32   | leaky_relu | 1.60     | 1.90     | 0.84    | ✅    |
+| int32   | elu        | 2.20     | 1.60     | 1.38    | ✅    |
+| int32   | sigmoid    | 1.70     | 1.50     | 1.13    | ✅    |
+| int32   | tanh       | 1.80     | 1.60     | 1.13    | ✅    |
+| int32   | softmax    | 2.30     | 1.60     | 1.44    | ✅    |
+| uint32  | linear     | 2.30     | 1.90     | 1.21    | ✅    |
+| uint32  | relu       | 1.70     | 1.50     | 1.13    | ✅    |
+| uint32  | leaky_relu | 1.60     | 1.60     | 1.00    | ✅    |
+| uint32  | elu        | 3.20     | 1.50     | 2.13    | ✅    |
+| uint32  | sigmoid    | 1.50     | 1.60     | 0.94    | ✅    |
+| uint32  | tanh       | 1.60     | 1.60     | 1.00    | ✅    |
+| uint32  | softmax    | 1.70     | 1.50     | 1.13    | ✅    |
 
 ## How It Works
 
