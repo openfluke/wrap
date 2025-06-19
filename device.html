@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Paragon GPU Device Information - Full Detection</title>
+    <script src="wasm_exec.js"></script>
+    <style>
+      body {
+        font-family: "Consolas", "Monaco", "Courier New", monospace;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #0d1117;
+        color: #c9d1d9;
+      }
+      .container {
+        background: #161b22;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        border: 1px solid #30363d;
+      }
+      h1 {
+        color: #58a6ff;
+        border-bottom: 2px solid #21262d;
+        padding-bottom: 10px;
+        text-align: center;
+      }
+      .gpu-card {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+      .gpu-title {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #7c3aed;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #30363d;
+        padding-bottom: 8px;
+      }
+      .gpu-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 15px;
+      }
+      .info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: #21262d;
+        border-radius: 4px;
+        border-left: 3px solid #58a6ff;
+      }
+      .info-label {
+        font-weight: bold;
+        color: #f0f6fc;
+        min-width: 200px;
+      }
+      .info-value {
+        color: #7ee787;
+        font-family: "Courier New", monospace;
+        word-break: break-all;
+        text-align: right;
+        flex: 1;
+      }
+      button {
+        background: linear-gradient(135deg, #7c3aed, #3b82f6);
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        margin: 10px 5px;
+        transition: all 0.3s ease;
+      }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+      }
+      button:disabled {
+        background: #6b7280;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+      .status {
+        padding: 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+        font-weight: bold;
+        text-align: center;
+      }
+      .status.loading {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #000;
+      }
+      .status.success {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #000;
+      }
+      .status.error {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: #fff;
+      }
+      .summary {
+        background: linear-gradient(135deg, #1e293b, #334155);
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border-left: 4px solid #58a6ff;
+      }
+      .raw-data {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 20px;
+        margin: 20px 0;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .raw-data h3 {
+        color: #f85149;
+        margin-top: 0;
+      }
+      .raw-data pre {
+        background: #161b22;
+        padding: 15px;
+        border-radius: 4px;
+        border: 1px solid #21262d;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .controls {
+        text-align: center;
+        margin: 20px 0;
+      }
+      .section-divider {
+        border-top: 2px solid #30363d;
+        margin: 30px 0;
+        padding-top: 20px;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+      }
+      .stat-card {
+        background: #21262d;
+        padding: 15px;
+        border-radius: 6px;
+        text-align: center;
+        border: 1px solid #30363d;
+      }
+      .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        color: #7ee787;
+      }
+      .stat-label {
+        color: #8b949e;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🖥️ Paragon GPU Device Information - Complete Detection</h1>
+
+      <div class="controls">
+        <button onclick="getAllGPUInfo()" id="getAllBtn">
+          🚀 Get ALL GPU Information
+        </button>
+        <button onclick="toggleRawData()" id="rawBtn">
+          📋 Toggle Raw JSON Data
+        </button>
+        <button onclick="exportData()" id="exportBtn">💾 Export Data</button>
+      </div>
+
+      <div id="status" class="status loading">Loading WASM module...</div>
+
+      <div id="summary" class="summary" style="display: none">
+        <h3>📊 Detection Summary</h3>
+        <div id="summaryContent"></div>
+        <div id="statsGrid" class="stats-grid"></div>
+      </div>
+
+      <div id="rawData" class="raw-data" style="display: none">
+        <h3>🔍 Raw JSON Data</h3>
+        <pre id="rawJson"></pre>
+      </div>
+
+      <div id="gpuContainer"></div>
+    </div>
+
+    <script>
+      const go = new Go();
+      let wasmReady = false;
+      let paragonNetwork = null;
+      let lastGPUData = null;
+
+      async function setupWebGPU() {
+        try {
+          const adapter = await navigator.gpu.requestAdapter();
+          if (!adapter) throw new Error("WebGPU adapter not available");
+          const device = await adapter.requestDevice();
+          window.webgpuAdapter = adapter;
+          window.webgpuDevice = device;
+          window.webgpuQueue = device.queue;
+          console.log("WebGPU pre-initialized");
+          return true;
+        } catch (e) {
+          console.error("WebGPU setup failed:", e);
+          updateStatus("error", `❌ WebGPU setup failed: ${e.message}`);
+          return false;
+        }
+      }
+
+      async function loadWasm() {
+        try {
+          const webgpuReady = await setupWebGPU();
+          updateStatus("loading", "🔄 Loading WASM module...");
+
+          const result = await WebAssembly.instantiateStreaming(
+            fetch("paragon.wasm"),
+            go.importObject
+          );
+          go.run(result.instance);
+
+          // Create a minimal network to access GPU info methods
+          const dummyLayerSizes = JSON.stringify([
+            { Width: 2, Height: 2 },
+            { Width: 1, Height: 1 },
+          ]);
+          const dummyActivations = JSON.stringify(["linear", "linear"]);
+          const dummyFullConnect = JSON.stringify([true, true]);
+
+          paragonNetwork = window.NewNetworkFloat32(
+            dummyLayerSizes,
+            dummyActivations,
+            dummyFullConnect
+          );
+
+          wasmReady = true;
+          updateStatus(
+            "success",
+            "✅ WASM Loaded. Ready for complete GPU detection."
+          );
+
+          // Automatically get ALL GPU info on load
+          setTimeout(getAllGPUInfo, 500);
+        } catch (e) {
+          console.error("WASM loading failed:", e);
+          updateStatus("error", `❌ WASM loading failed: ${e.message}`);
+        }
+      }
+
+      function updateStatus(type, message) {
+        const statusEl = document.getElementById("status");
+        statusEl.className = `status ${type}`;
+        statusEl.textContent = message;
+      }
+
+      async function getAllGPUInfo() {
+        if (!wasmReady || !paragonNetwork) {
+          updateStatus(
+            "error",
+            "❌ Paragon network not ready. Please reload the page."
+          );
+          return;
+        }
+
+        updateStatus(
+          "loading",
+          "🔍 Getting COMPLETE GPU information from Paragon..."
+        );
+
+        try {
+          // Call the GetAllGPUInfo method on the network instance
+          const gpuInfoResult = paragonNetwork.GetAllGPUInfo();
+          const gpuInfoJson = JSON.parse(gpuInfoResult);
+          const gpuInfo = gpuInfoJson[0]; // GetAllGPUInfo returns the result as first element
+
+          lastGPUData = {
+            paragonResult: gpuInfoResult,
+            parsedData: gpuInfo,
+            detectionTime: new Date().toISOString(),
+            wasmInfo: {
+              userAgent: navigator.userAgent,
+              webgpuSupported: !!navigator.gpu,
+              timestamp: Date.now(),
+            },
+          };
+
+          clearContainer();
+          displayCompleteGPUInfo(gpuInfo);
+          updateCompleteSummary(gpuInfo);
+          updateRawData();
+
+          updateStatus(
+            "success",
+            `✅ Complete detection finished! Found ${
+              gpuInfo ? gpuInfo.length : 0
+            } GPU(s) with full details.`
+          );
+        } catch (e) {
+          console.error("Error getting complete GPU info:", e);
+          updateStatus(
+            "error",
+            `❌ Error getting complete GPU info: ${e.message}`
+          );
+
+          // Show the error details in raw data for debugging
+          document.getElementById(
+            "rawJson"
+          ).textContent = `Error: ${e.message}\nStack: ${e.stack}`;
+          document.getElementById("rawData").style.display = "block";
+        }
+      }
+
+      function displayCompleteGPUInfo(gpus) {
+        const container = document.getElementById("gpuContainer");
+
+        if (!gpus || gpus.length === 0) {
+          container.innerHTML =
+            '<div class="gpu-card"><div class="gpu-title">❌ No GPUs Detected</div><p>Paragon could not detect any GPUs through WebGPU.</p></div>';
+          return;
+        }
+
+        gpus.forEach((gpu, index) => {
+          const gpuCard = document.createElement("div");
+          gpuCard.className = "gpu-card";
+
+          const title = document.createElement("div");
+          title.className = "gpu-title";
+          title.textContent = `🖥️ GPU ${gpu.index || index}: ${
+            gpu.name || "Unknown Device"
+          }`;
+
+          const infoGrid = document.createElement("div");
+          infoGrid.className = "gpu-info";
+
+          // Display EVERY field that exists in the GPU object
+          const allFields = Object.keys(gpu).sort();
+
+          allFields.forEach((key) => {
+            const value = gpu[key];
+            if (value !== undefined && value !== null && value !== "") {
+              const infoItem = document.createElement("div");
+              infoItem.className = "info-item";
+
+              const label = document.createElement("span");
+              label.className = "info-label";
+              label.textContent = formatFieldName(key);
+
+              const valueSpan = document.createElement("span");
+              valueSpan.className = "info-value";
+              valueSpan.textContent = formatFieldValue(key, value);
+
+              infoItem.appendChild(label);
+              infoItem.appendChild(valueSpan);
+              infoGrid.appendChild(infoItem);
+            }
+          });
+
+          gpuCard.appendChild(title);
+          gpuCard.appendChild(infoGrid);
+          container.appendChild(gpuCard);
+
+          // Add a divider between GPUs
+          if (index < gpus.length - 1) {
+            const divider = document.createElement("div");
+            divider.className = "section-divider";
+            container.appendChild(divider);
+          }
+        });
+      }
+
+      function formatFieldName(key) {
+        // Convert camelCase to readable labels
+        return (
+          key
+            .replace(/([A-Z])/g, " $1")
+            .replace(/^./, (str) => str.toUpperCase())
+            .replace(/Id$/i, "ID")
+            .replace(/Gpu/gi, "GPU")
+            .replace(/Mb$/i, "MB")
+            .replace(/Kb$/i, "KB")
+            .trim() + ":"
+        );
+      }
+
+      function formatFieldValue(key, value) {
+        // Format specific values for better readability
+        if (
+          key.toLowerCase().includes("vendorid") ||
+          key.toLowerCase().includes("deviceid")
+        ) {
+          return value; // Already formatted as hex in Go
+        }
+        if (key.toLowerCase().includes("size") && !isNaN(value)) {
+          return `${value}`;
+        }
+        return String(value);
+      }
+
+      function clearContainer() {
+        const container = document.getElementById("gpuContainer");
+        container.innerHTML = "";
+      }
+
+      function updateCompleteSummary(gpus) {
+        const summaryEl = document.getElementById("summary");
+        const contentEl = document.getElementById("summaryContent");
+        const statsEl = document.getElementById("statsGrid");
+
+        if (!gpus || gpus.length === 0) {
+          summaryEl.style.display = "none";
+          return;
+        }
+
+        // Calculate statistics
+        const totalGPUs = gpus.length;
+        const discreteGPUs = gpus.filter(
+          (gpu) =>
+            gpu.adapterType &&
+            gpu.adapterType.toLowerCase().includes("discrete")
+        ).length;
+        const integratedGPUs = gpus.filter(
+          (gpu) =>
+            gpu.adapterType &&
+            gpu.adapterType.toLowerCase().includes("integrated")
+        ).length;
+        const vendors = [
+          ...new Set(
+            gpus.map((gpu) => gpu.vendorName || gpu.vendor).filter((v) => v)
+          ),
+        ];
+        const backends = [
+          ...new Set(gpus.map((gpu) => gpu.backendType).filter((v) => v)),
+        ];
+        const architectures = [
+          ...new Set(gpus.map((gpu) => gpu.architecture).filter((v) => v)),
+        ];
+
+        // Total fields detected
+        const allFields = new Set();
+        gpus.forEach((gpu) =>
+          Object.keys(gpu).forEach((key) => allFields.add(key))
+        );
+
+        let summaryHTML = `
+          <strong>🔍 Detection Results:</strong><br>
+          <strong>Total GPUs Found:</strong> ${totalGPUs}<br>
+          <strong>Discrete GPUs:</strong> ${discreteGPUs}<br>
+          <strong>Integrated GPUs:</strong> ${integratedGPUs}<br>
+          <strong>Vendors:</strong> ${vendors.join(", ") || "Unknown"}<br>
+          <strong>Backend Types:</strong> ${
+            backends.join(", ") || "Unknown"
+          }<br>
+          <strong>Architectures:</strong> ${
+            architectures.join(", ") || "Unknown"
+          }<br>
+          <strong>Total Fields Detected:</strong> ${allFields.size}
+        `;
+
+        contentEl.innerHTML = summaryHTML;
+
+        // Create stats cards
+        const stats = [
+          { number: totalGPUs, label: "Total GPUs" },
+          { number: discreteGPUs, label: "Discrete GPUs" },
+          { number: integratedGPUs, label: "Integrated GPUs" },
+          { number: vendors.length, label: "Unique Vendors" },
+          { number: allFields.size, label: "Data Fields" },
+          { number: backends.length, label: "Backend Types" },
+        ];
+
+        statsEl.innerHTML = "";
+        stats.forEach((stat) => {
+          const card = document.createElement("div");
+          card.className = "stat-card";
+          card.innerHTML = `
+            <div class="stat-number">${stat.number}</div>
+            <div class="stat-label">${stat.label}</div>
+          `;
+          statsEl.appendChild(card);
+        });
+
+        summaryEl.style.display = "block";
+      }
+
+      function updateRawData() {
+        if (lastGPUData) {
+          const rawJson = document.getElementById("rawJson");
+          rawJson.textContent = JSON.stringify(lastGPUData, null, 2);
+        }
+      }
+
+      function toggleRawData() {
+        const rawData = document.getElementById("rawData");
+        if (rawData.style.display === "none") {
+          rawData.style.display = "block";
+          document.getElementById("rawBtn").textContent =
+            "📋 Hide Raw JSON Data";
+        } else {
+          rawData.style.display = "none";
+          document.getElementById("rawBtn").textContent =
+            "📋 Show Raw JSON Data";
+        }
+      }
+
+      function exportData() {
+        if (!lastGPUData) {
+          updateStatus("error", "❌ No data to export. Run detection first.");
+          return;
+        }
+
+        const dataStr = JSON.stringify(lastGPUData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: "application/json" });
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(dataBlob);
+        link.download = `paragon-gpu-info-${
+          new Date().toISOString().split("T")[0]
+        }.json`;
+        link.click();
+
+        updateStatus("success", "✅ GPU data exported successfully!");
+      }
+
+      // Load WASM on page load
+      loadWasm().catch(console.error);
+    </script>
+  </body>
+</html>
