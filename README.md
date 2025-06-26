@@ -7,11 +7,11 @@ This project provides a WebAssembly (WASM) wrapper for the Paragon AI framework,
 ## Git clone from
 
 ```
-go get github.com/openfluke/paragon/v3@v3.1.2
+go get github.com/openfluke/paragon/v3@v3.1.3
 ```
 
 ```
-go get github.com/openfluke/webgpu@ea0f165
+go get github.com/openfluke/webgpu@v0.0.1
 ```
 
 ## Purpose
