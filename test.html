@@ -35,7 +35,7 @@
 
       async function loadWasm() {
         try {
-          await setupWebGPU();
+          //await setupWebGPU();
           const result = await WebAssembly.instantiateStreaming(
             fetch("paragon.wasm"),
             go.importObject

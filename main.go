@@ -333,7 +333,9 @@ func newParagonWrapper(numericType string) js.Func {
 	return js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		// Parse the NewNetwork arguments
 		if len(args) < 3 {
-			return "Expected 3 arguments: layerSizes, activations, fullyConnected"
+			errMsg := "Expected 3 arguments: layerSizes, activations, fullyConnected"
+			js.Global().Call("console", "error", errMsg)
+			return errMsg
 		}
 
 		var layerSizes []struct{ Width, Height int }
@@ -341,45 +343,60 @@ func newParagonWrapper(numericType string) js.Func {
 		var fullyConnected []bool
 
 		if err := json.Unmarshal([]byte(args[0].String()), &layerSizes); err != nil {
-			return fmt.Sprintf("Invalid layerSizes JSON: %v", err)
+			errMsg := fmt.Sprintf("Invalid layerSizes JSON: %v", err)
+			js.Global().Call("console", "error", errMsg)
+			return errMsg
 		}
 		if err := json.Unmarshal([]byte(args[1].String()), &activations); err != nil {
-			return fmt.Sprintf("Invalid activations JSON: %v", err)
+			errMsg := fmt.Sprintf("Invalid activations JSON: %v", err)
+			js.Global().Call("console", "error", errMsg)
+			return errMsg
 		}
 		if err := json.Unmarshal([]byte(args[2].String()), &fullyConnected); err != nil {
-			return fmt.Sprintf("Invalid fullyConnected JSON: %v", err)
+			errMsg := fmt.Sprintf("Invalid fullyConnected JSON: %v", err)
+			js.Global().Call("console", "error", errMsg)
+			return errMsg
 		}
 
 		var network interface{}
+		var err error
 
 		// Create network based on the numeric type
 		switch numericType {
 		case "float32":
-			network = paragon.NewNetwork[float32](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[float32](layerSizes, activations, fullyConnected)
 		case "float64":
-			network = paragon.NewNetwork[float64](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[float64](layerSizes, activations, fullyConnected)
 		case "int":
-			network = paragon.NewNetwork[int](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[int](layerSizes, activations, fullyConnected)
 		case "int8":
-			network = paragon.NewNetwork[int8](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[int8](layerSizes, activations, fullyConnected)
 		case "int16":
-			network = paragon.NewNetwork[int16](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[int16](layerSizes, activations, fullyConnected)
 		case "int32":
-			network = paragon.NewNetwork[int32](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[int32](layerSizes, activations, fullyConnected)
 		case "int64":
-			network = paragon.NewNetwork[int64](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[int64](layerSizes, activations, fullyConnected)
 		case "uint":
-			network = paragon.NewNetwork[uint](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[uint](layerSizes, activations, fullyConnected)
 		case "uint8":
-			network = paragon.NewNetwork[uint8](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[uint8](layerSizes, activations, fullyConnected)
 		case "uint16":
-			network = paragon.NewNetwork[uint16](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[uint16](layerSizes, activations, fullyConnected)
 		case "uint32":
-			network = paragon.NewNetwork[uint32](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[uint32](layerSizes, activations, fullyConnected)
 		case "uint64":
-			network = paragon.NewNetwork[uint64](layerSizes, activations, fullyConnected)
+			network, err = paragon.NewNetwork[uint64](layerSizes, activations, fullyConnected)
 		default:
-			return fmt.Sprintf("Unsupported numeric type: %s", numericType)
+			errMsg := fmt.Sprintf("Unsupported numeric type: %s", numericType)
+			js.Global().Call("console", "error", errMsg)
+			return errMsg
+		}
+
+		if err != nil {
+			errMsg := fmt.Sprintf("Error: failed to create network: %v", err)
+			js.Global().Call("console", "error", errMsg)
+			return errMsg
 		}
 
 		obj := js.Global().Get("Object").New()

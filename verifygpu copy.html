@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Paragon WASM CPU vs WebGPU Demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <script src="wasm_exec.js"></script>
+    <style>
+      body { font-family: sans-serif; margin: 2em; }
+      .results-vert { display: block; }
+      table { border-collapse: collapse; margin-bottom: 1em; width: 100%; font-size: 0.95em; }
+      th, td { border: 1px solid #ccc; padding: 0.2em 0.4em; text-align: center; }
+      th { background: #f0f0f0; }
+      .match { color: green; font-weight: bold; }
+      .mismatch { color: red; font-weight: bold; }
+      pre { background: #f8f8f8; padding: 0.3em 0.5em; margin: 0; font-size: 0.92em; max-width: 100%; overflow-x: auto; white-space: pre; border-radius: 4px; }
+      h2 { border-bottom: 2px solid #0078d4; padding-bottom: 0.2em; font-size: 1.1em; margin: 0.5em 0 0.5em 0; }
+      button { background: #0078d4; color: white; border: none; padding: 0.5em 1em; cursor: pointer; font-size: 1em; margin-right: 0.5em; }
+      button:hover { background: #005a9e; }
+      .output-scroll { max-width: 350px; overflow-x: auto; white-space: pre; font-size: 0.95em; }
+      .is-match { color: #23d160; font-weight: bold; }
+      .is-mismatch { color: #ff3860; font-weight: bold; }
+      .is-tiny { font-size: 0.9em; }
+      .table-container { overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Paragon WASM CPU vs WebGPU</h1>
+    <button onclick="runComparison()">Run CPU vs GPU Comparison</button>
+    <button onclick="clearResults()">Clear Results</button>
+    <div id="results"></div>
+    <script>
+      const go = new Go();
+      let wasmReady = false;
+      let attempts = [];
+      let webGPUDevice = null;
+
+      async function setupWebGPU() {
+        try {
+          if (!navigator.gpu) {
+            console.warn("WebGPU is not supported in this browser.");
+            return false;
+          }
+          const adapter = await navigator.gpu.requestAdapter();
+          if (!adapter) {
+            console.warn("No WebGPU adapter found.");
+            return false;
+          }
+          const device = await adapter.requestDevice();
+          if (!device) {
+            console.warn("No WebGPU device found.");
+            return false;
+          }
+          webGPUDevice = device;
+          console.log("WebGPU device initialized in JavaScript:", device);
+          return true;
+        } catch (e) {
+          console.warn("Failed to initialize WebGPU in JavaScript:", e);
+          return false;
+        }
+      }
+
+      // Compute shader for matrix multiplication (input * weights)
+      const shaderCode = `
+        @group(0) @binding(0) var<storage, read> input: array<f32>;
+        @group(0) @binding(1) var<storage, read> weights: array<f32>;
+        @group(0) @binding(2) var<storage, read_write> output: array<f32>;
+        @group(0) @binding(3) var<uniform> dims: vec4<u32>;
+
+        @compute @workgroup_size(8, 8)
+        fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+          let batch = id.z;
+          let row = id.y;
+          let col = id.x;
+          let batchSize = dims[0];
+          let inputSize = dims[1];
+          let outputSize = dims[2];
+
+          if (row >= batchSize || col >= outputSize) {
+            return;
+          }
+
+          var sum: f32 = 0.0;
+          let inputOffset = row * inputSize;
+          let weightOffset = col * inputSize;
+          for (var i = 0u; i < inputSize; i++) {
+            sum += input[inputOffset + i] * weights[weightOffset + i];
+          }
+          output[row * outputSize + col] = sum;
+        }
+      `;
+
+      async function runWebGPUForward(inputData, weightData, batchSize, inputSize, outputSize) {
+        if (!webGPUDevice) {
+          console.warn("WebGPU device not initialized.");
+          return null;
+        }
+
+        const inputBuffer = webGPUDevice.createBuffer({
+          size: inputData.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        const weightBuffer = webGPUDevice.createBuffer({
+          size: weightData.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        const outputBuffer = webGPUDevice.createBuffer({
+          size: batchSize * outputSize * 4,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        const dimsBuffer = webGPUDevice.createBuffer({
+          size: 16,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        const stagingBuffer = webGPUDevice.createBuffer({
+          size: batchSize * outputSize * 4,
+          usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+        });
+
+        webGPUDevice.queue.writeBuffer(inputBuffer, 0, inputData);
+        webGPUDevice.queue.writeBuffer(weightBuffer, 0, weightData);
+        webGPUDevice.queue.writeBuffer(dimsBuffer, 0, new Uint32Array([batchSize, inputSize, outputSize, 0]));
+
+        const bindGroupLayout = webGPUDevice.createBindGroupLayout({
+          entries: [
+            { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+            { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+            { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+            { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+          ],
+        });
+
+        const pipeline = webGPUDevice.createComputePipeline({
+          layout: webGPUDevice.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+          compute: {
+            module: webGPUDevice.createShaderModule({ code: shaderCode }),
+            entryPoint: 'main',
+          },
+        });
+
+        const bindGroup = webGPUDevice.createBindGroup({
+          layout: bindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: inputBuffer } },
+            { binding: 1, resource: { buffer: weightBuffer } },
+            { binding: 2, resource: { buffer: outputBuffer } },
+            { binding: 3, resource: { buffer: dimsBuffer } },
+          ],
+        });
+
+        const commandEncoder = webGPUDevice.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(pipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        passEncoder.dispatchWorkgroups(Math.ceil(outputSize / 8), Math.ceil(batchSize / 8), 1);
+        passEncoder.end();
+        commandEncoder.copyBufferToBuffer(outputBuffer, 0, stagingBuffer, 0, batchSize * outputSize * 4);
+        webGPUDevice.queue.submit([commandEncoder.finish()]);
+
+        await stagingBuffer.mapAsync(GPUMapMode.READ);
+        const outputData = new Float32Array(stagingBuffer.getMappedRange());
+        const result = [];
+        for (let i = 0; i < batchSize; i++) {
+          result.push(Array.from(outputData.slice(i * outputSize, (i + 1) * outputSize)));
+        }
+        stagingBuffer.unmap();
+        return result;
+      }
+
+      async function loadWasm() {
+        try {
+          const result = await WebAssembly.instantiateStreaming(fetch("paragon.wasm"), go.importObject);
+          go.run(result.instance);
+          window.NewNetworkFloat32 = NewNetworkFloat32;
+          console.log("WASM exports:", Object.keys(window).filter(key => typeof window[key] === 'function'));
+          
+          const webGPUInitialized = await setupWebGPU();
+          if (webGPUInitialized && typeof window.setupWebGPU === "function") {
+            try {
+              window.setupWebGPU(webGPUDevice);
+              console.log("WebGPU initialized successfully via WASM setupWebGPU.");
+            } catch (e) {
+              console.warn("Failed to call WASM setupWebGPU:", e);
+            }
+          } else {
+            console.warn("WebGPU cannot be used: setupWebGPU function not found or initialization failed.");
+          }
+          wasmReady = true;
+        } catch (e) {
+          console.error("WASM loading failed:", e);
+          document.getElementById("results").innerHTML = "<div class='notification is-danger'>❌ WASM loading failed: " + e.message + "</div>";
+        }
+      }
+
+      function arraysMatch(a, b, tol = 1e-5) {
+        if (!a || !b || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+          if (Math.abs(a[i] - b[i]) > tol) return false;
+        }
+        return true;
+      }
+
+      function formatArr(arr, digits = 4) {
+        return '[' + arr.map(x => Number(x).toFixed(digits)).join(', ') + ']';
+      }
+
+      function clearResults() {
+        attempts = [];
+        renderResults();
+      }
+
+      async function runComparison() {
+        if (!wasmReady || !window.NewNetworkFloat32) {
+          document.getElementById("results").innerHTML = "<div class='notification is-danger'>❌ WASM not ready. Reload page.</div>";
+          return;
+        }
+
+        const layerSizes = JSON.stringify([{ Width: 64, Height: 64 }, { Width: 32, Height: 32 }, { Width: 16, Height: 16 }, { Width: 1, Height: 10 }]);
+        const activations = JSON.stringify(["relu", "relu", "relu", "softmax"]);
+        const fullConnect = JSON.stringify([true, true, true, true]);
+        const batchSize = 8;
+        const inputSize = 64 * 64;
+        const outputSize = 10;
+        const input = Array.from({ length: batchSize }, () => Array.from({ length: inputSize }, () => Math.random()));
+        const target = Array.from({ length: batchSize }, () => Array.from({ length: outputSize }, () => Math.random()));
+
+        // CPU
+        let cpuNet = window.NewNetworkFloat32(layerSizes, activations, fullConnect);
+        cpuNet.WebGPUNative = false;
+        try {
+          cpuNet.Forward(JSON.stringify(input));
+          const cpuStart = performance.now();
+          cpuNet.Forward(JSON.stringify(input));
+          const cpuEnd = performance.now();
+          const cpuOut = JSON.parse(cpuNet.GetOutput());
+          const cpuTrainStart = performance.now();
+          for (let i = 0; i < 10; i++) cpuNet.Train(JSON.stringify(input), JSON.stringify(target), 1, 0.01, false, 1, -1);
+          const cpuTrainEnd = performance.now();
+          cpuNet.Forward(JSON.stringify(input));
+          const cpuTrainOut = JSON.parse(cpuNet.GetOutput());
+          attempts.push({ backend: 'CPU', out: cpuOut, trainOut: cpuTrainOut, time: cpuEnd - cpuStart, trainTime: cpuTrainEnd - cpuTrainStart, match: null, trainMatch: null });
+        } catch (e) {
+          console.error("CPU path failed:", e);
+          document.getElementById("results").innerHTML += "<div class='notification is-danger'>❌ CPU path failed: " + e.message + "</div>";
+          return;
+        }
+        renderResults();
+
+        // GPU (WASM fallback)
+        let gpuNet = window.NewNetworkFloat32(layerSizes, activations, fullConnect);
+        gpuNet.WebGPUNative = true;
+        try {
+          gpuNet.Forward(JSON.stringify(input));
+          const gpuStart = performance.now();
+          gpuNet.Forward(JSON.stringify(input));
+          const gpuEnd = performance.now();
+          const gpuOut = JSON.parse(gpuNet.GetOutput());
+          const gpuTrainStart = performance.now();
+          for (let i = 0; i < 10; i++) gpuNet.Train(JSON.stringify(input), JSON.stringify(target), 1, 0.01, false, 1, -1);
+          const gpuTrainEnd = performance.now();
+          gpuNet.Forward(JSON.stringify(input));
+          const gpuTrainOut = JSON.parse(gpuNet.GetOutput());
+          const prevCpu = attempts[attempts.length - 1];
+          const match = arraysMatch(prevCpu.out[0], gpuOut[0]);
+          const trainMatch = arraysMatch(prevCpu.trainOut[0], gpuTrainOut[0]);
+          attempts.push({ backend: 'GPU (WASM fallback)', out: gpuOut, trainOut: gpuTrainOut, time: gpuEnd - gpuStart, trainTime: gpuTrainEnd - gpuTrainStart, match, trainMatch });
+        } catch (e) {
+          console.warn("WebGPU path failed, falling back to CPU:", e);
+          gpuNet.WebGPUNative = false;
+          gpuNet.Forward(JSON.stringify(input));
+          const gpuStart = performance.now();
+          gpuNet.Forward(JSON.stringify(input));
+          const gpuEnd = performance.now();
+          const gpuOut = JSON.parse(gpuNet.GetOutput());
+          const gpuTrainStart = performance.now();
+          for (let i = 0; i < 10; i++) gpuNet.Train(JSON.stringify(input), JSON.stringify(target), 1, 0.01, false, 1, -1);
+          const gpuTrainEnd = performance.now();
+          gpuNet.Forward(JSON.stringify(input));
+          const gpuTrainOut = JSON.parse(gpuNet.GetOutput());
+          const prevCpu = attempts[attempts.length - 1];
+          const match = arraysMatch(prevCpu.out[0], gpuOut[0]);
+          const trainMatch = arraysMatch(prevCpu.trainOut[0], gpuTrainOut[0]);
+          attempts.push({ backend: 'GPU (CPU Fallback)', out: gpuOut, trainOut: gpuTrainOut, time: gpuEnd - gpuStart, trainTime: gpuTrainEnd - gpuTrainStart, match, trainMatch });
+        }
+        renderResults();
+
+        // JavaScript WebGPU
+        if (webGPUDevice) {
+          const inputFlat = new Float32Array(input.flat());
+          const weights = new Float32Array(inputSize * outputSize);
+          for (let i = 0; i < weights.length; i++) weights[i] = Math.random(); // Random weights for demo
+          try {
+            const jsGpuStart = performance.now();
+            const jsGpuOut = await runWebGPUForward(inputFlat, weights, batchSize, inputSize, outputSize);
+            const jsGpuEnd = performance.now();
+            const prevCpu = attempts[0];
+            const match = arraysMatch(prevCpu.out[0], jsGpuOut[0], 0.1); // Larger tolerance due to simplified computation
+            attempts.push({ backend: 'GPU (JavaScript)', out: jsGpuOut, trainOut: null, time: jsGpuEnd - jsGpuStart, trainTime: null, match, trainMatch: null });
+            console.log("JavaScript WebGPU Output:", jsGpuOut);
+            renderResults();
+          } catch (e) {
+            console.error("JavaScript WebGPU failed:", e);
+            document.getElementById("results").innerHTML += "<div class='notification is-danger'>❌ JavaScript WebGPU failed: " + e.message + "</div>";
+          }
+        }
+      }
+
+      function renderResults() {
+        const resultsDiv = document.getElementById("results");
+        if (attempts.length === 0) {
+          resultsDiv.innerHTML = '<div class="notification is-light">No results yet. Click <b>Run CPU vs GPU Comparison</b>.</div>';
+          return;
+        }
+        let infTable = `<div class="card mb-4"><header class="card-header"><p class="card-header-title">Inference (Forward Pass)</p></header><div class="card-content"><div class="table-container"><table class="table is-bordered is-striped is-narrow is-hoverable is-fullwidth is-tiny"><thead><tr><th>Attempt</th><th>Backend</th><th>Output</th><th>Time (ms)</th><th>Match?</th></tr></thead><tbody>`;
+        let trainTable = `<div class="card"><header class="card-header"><p class="card-header-title">Training (10 epochs, batch size 8)</p></header><div class="card-content"><div class="table-container"><table class="table is-bordered is-striped is-narrow is-hoverable is-fullwidth is-tiny"><thead><tr><th>Attempt</th><th>Backend</th><th>Output</th><th>Time (ms)</th><th>Match?</th></tr></thead><tbody>`;
+        let attemptNum = 1;
+        for (const attempt of attempts) {
+          infTable += `<tr><td>${attemptNum}</td><td>${attempt.backend}</td><td><pre class="output-scroll">${formatArr(attempt.out[0])}</pre></td><td>${attempt.time.toFixed(2)}</td><td>${attempt.match === null ? '' : attempt.match ? '<span class="is-match">✅</span>' : '<span class="is-mismatch">❌</span>'}</td></tr>`;
+          if (attempt.trainOut) {
+            trainTable += `<tr><td>${attemptNum}</td><td>${attempt.backend}</td><td><pre class="output-scroll">${formatArr(attempt.trainOut[0])}</pre></td><td>${attempt.trainTime.toFixed(2)}</td><td>${attempt.trainMatch === null ? '' : attempt.trainMatch ? '<span class="is-match">✅</span>' : '<span class="is-mismatch">❌</span>'}</td></tr>`;
+          }
+          attemptNum++;
+        }
+        infTable += '</tbody></table></div></div></div>';
+        trainTable += '</tbody></table></div></div></div>';
+        resultsDiv.innerHTML = `<div class="results-vert">${infTable}${trainTable}</div>`;
+      }
+
+      loadWasm().catch(console.error);
+    </script>
+  </body>
+</html>
